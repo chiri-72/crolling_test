@@ -1,0 +1,47 @@
+{
+  "version": "2.0",
+  "lastUpdated": "2026-02-17T10:54:44.410Z",
+  "activeFeatures": [
+    "execution"
+  ],
+  "primaryFeature": "execution",
+  "features": {
+    "execution": {
+      "phase": "do",
+      "phaseNumber": 3,
+      "matchRate": null,
+      "iterationCount": 0,
+      "requirements": [],
+      "documents": {},
+      "timestamps": {
+        "started": "2026-02-17T10:33:28.638Z",
+        "lastUpdated": "2026-02-17T10:54:44.410Z"
+      },
+      "lastFile": "/Users/chiri/Desktop/instgram/execution/retry_translate.py"
+    }
+  },
+  "pipeline": {
+    "currentPhase": 1,
+    "level": "Dynamic",
+    "phaseHistory": []
+  },
+  "session": {
+    "startedAt": "2026-02-17T10:26:39.740Z",
+    "onboardingCompleted": false,
+    "lastActivity": "2026-02-17T10:54:44.410Z"
+  },
+  "history": [
+    {
+      "timestamp": "2026-02-17T10:33:28.638Z",
+      "feature": "execution",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-02-17T10:54:44.410Z",
+      "feature": "execution",
+      "phase": "do",
+      "action": "updated"
+    }
+  ]
+}
