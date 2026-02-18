@@ -1,0 +1,38 @@
+name: Daily Crawl
+
+on:
+  schedule:
+    - cron: '0 16 * * *' # UTC 16:00 = KST 01:00
+  workflow_dispatch:
+    inputs:
+      dryRun:
+        description: 'Dry run (no save/translate)'
+        type: boolean
+        default: false
+      translate:
+        description: 'Enable translation'
+        type: boolean
+        default: true
+
+jobs:
+  crawl:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Trigger daily crawl
+        run: |
+          RESPONSE=$(curl -sf -X POST "$CRAWL_ENDPOINT/api/crawl" \
+            -H "Authorization: Bearer $CRAWL_SECRET" \
+            -H "Content-Type: application/json" \
+            -d "{\"dryRun\": ${{ inputs.dryRun || false }}, \"translate\": ${{ inputs.translate || true }}}")
+
+          echo "$RESPONSE" | jq .
+
+          STATUS=$(echo "$RESPONSE" | jq -r '.status // "unknown"')
+          if [ "$STATUS" = "fail" ]; then
+            echo "::error::Crawl failed"
+            exit 1
+          fi
+        env:
+          CRAWL_ENDPOINT: ${{ secrets.CRAWL_ENDPOINT }}
+          CRAWL_SECRET: ${{ secrets.CRAWL_SECRET }}

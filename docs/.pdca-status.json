@@ -1,12 +1,38 @@
 {
   "version": "2.0",
-  "lastUpdated": "2026-02-17T12:18:42.562Z",
+  "lastUpdated": "2026-02-17T12:46:46.927Z",
   "activeFeatures": [
-    "execution"
+    "daily-crawl-viewer",
+    "web",
+    "crawl",
+    "[id]",
+    "sources",
+    "runs"
   ],
-  "primaryFeature": "execution",
+  "primaryFeature": "daily-crawl-viewer",
   "features": {
-    "execution": {
+    "daily-crawl-viewer": {
+      "phase": "do",
+      "phaseNumber": 3,
+      "matchRate": null,
+      "iterationCount": 0,
+      "requirements": [
+        "V3 DB schema (5 tables: sources, items, item_translations, crawl_runs, crawl_logs)",
+        "TypeScript crawl pipeline with quality filters + translation guardrails",
+        "Daily cron at 01:00 KST (GitHub Actions + Supabase pg_cron)",
+        "Next.js App Router viewer (/, /item/[id], /sources, /runs)",
+        "OpenAI translation with token budget (20K/run)"
+      ],
+      "documents": {
+        "plan": "docs/01-plan/features/daily-crawl-viewer.plan.md",
+        "design": "docs/02-design/features/daily-crawl-viewer.design.md"
+      },
+      "timestamps": {
+        "started": "2026-02-17T14:00:00.000Z",
+        "lastUpdated": "2026-02-17T15:00:00.000Z"
+      }
+    },
+    "web": {
       "phase": "do",
       "phaseNumber": 3,
       "matchRate": null,
@@ -14,50 +40,174 @@
       "requirements": [],
       "documents": {},
       "timestamps": {
-        "started": "2026-02-17T10:33:28.638Z",
-        "lastUpdated": "2026-02-17T12:18:42.562Z"
+        "started": "2026-02-17T12:42:09.969Z",
+        "lastUpdated": "2026-02-17T12:46:08.818Z"
       },
-      "lastFile": "/Users/chiri/Desktop/instgram/execution/scraper.py"
+      "lastFile": "/Users/chiri/Desktop/instgram/web/app/page.tsx"
+    },
+    "crawl": {
+      "phase": "do",
+      "phaseNumber": 3,
+      "matchRate": null,
+      "iterationCount": 0,
+      "requirements": [],
+      "documents": {},
+      "timestamps": {
+        "started": "2026-02-17T12:42:40.687Z",
+        "lastUpdated": "2026-02-17T12:44:43.355Z"
+      },
+      "lastFile": "/Users/chiri/Desktop/instgram/web/app/api/crawl/route.ts"
+    },
+    "[id]": {
+      "phase": "do",
+      "phaseNumber": 3,
+      "matchRate": null,
+      "iterationCount": 0,
+      "requirements": [],
+      "documents": {},
+      "timestamps": {
+        "started": "2026-02-17T12:46:26.664Z",
+        "lastUpdated": "2026-02-17T12:46:26.664Z"
+      },
+      "lastFile": "/Users/chiri/Desktop/instgram/web/app/item/[id]/page.tsx"
+    },
+    "sources": {
+      "phase": "do",
+      "phaseNumber": 3,
+      "matchRate": null,
+      "iterationCount": 0,
+      "requirements": [],
+      "documents": {},
+      "timestamps": {
+        "started": "2026-02-17T12:46:34.602Z",
+        "lastUpdated": "2026-02-17T12:46:34.602Z"
+      },
+      "lastFile": "/Users/chiri/Desktop/instgram/web/app/sources/page.tsx"
+    },
+    "runs": {
+      "phase": "do",
+      "phaseNumber": 3,
+      "matchRate": null,
+      "iterationCount": 0,
+      "requirements": [],
+      "documents": {},
+      "timestamps": {
+        "started": "2026-02-17T12:46:46.926Z",
+        "lastUpdated": "2026-02-17T12:46:46.926Z"
+      },
+      "lastFile": "/Users/chiri/Desktop/instgram/web/app/runs/page.tsx"
     }
   },
   "pipeline": {
-    "currentPhase": 1,
+    "currentPhase": 3,
     "level": "Dynamic",
     "phaseHistory": []
   },
   "session": {
     "startedAt": "2026-02-17T10:26:39.740Z",
     "onboardingCompleted": false,
-    "lastActivity": "2026-02-17T12:18:42.562Z"
+    "lastActivity": "2026-02-17T12:46:46.927Z"
   },
   "history": [
     {
-      "timestamp": "2026-02-17T10:33:28.638Z",
-      "feature": "execution",
+      "timestamp": "2026-02-17T14:00:00.000Z",
+      "feature": "daily-crawl-viewer",
+      "phase": "plan",
+      "action": "created"
+    },
+    {
+      "timestamp": "2026-02-17T14:30:00.000Z",
+      "feature": "daily-crawl-viewer",
+      "phase": "design",
+      "action": "created"
+    },
+    {
+      "timestamp": "2026-02-17T15:00:00.000Z",
+      "feature": "daily-crawl-viewer",
+      "phase": "do",
+      "action": "started"
+    },
+    {
+      "timestamp": "2026-02-17T12:42:09.969Z",
+      "feature": "web",
       "phase": "do",
       "action": "updated"
     },
     {
-      "timestamp": "2026-02-17T10:54:44.410Z",
-      "feature": "execution",
+      "timestamp": "2026-02-17T12:42:17.018Z",
+      "feature": "web",
       "phase": "do",
       "action": "updated"
     },
     {
-      "timestamp": "2026-02-17T12:14:31.704Z",
-      "feature": "execution",
+      "timestamp": "2026-02-17T12:42:40.687Z",
+      "feature": "crawl",
       "phase": "do",
       "action": "updated"
     },
     {
-      "timestamp": "2026-02-17T12:15:03.746Z",
-      "feature": "execution",
+      "timestamp": "2026-02-17T12:42:44.916Z",
+      "feature": "crawl",
       "phase": "do",
       "action": "updated"
     },
     {
-      "timestamp": "2026-02-17T12:18:42.562Z",
-      "feature": "execution",
+      "timestamp": "2026-02-17T12:43:25.552Z",
+      "feature": "crawl",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-02-17T12:43:27.615Z",
+      "feature": "crawl",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-02-17T12:43:46.414Z",
+      "feature": "crawl",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-02-17T12:44:16.836Z",
+      "feature": "crawl",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-02-17T12:44:43.355Z",
+      "feature": "crawl",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-02-17T12:45:15.672Z",
+      "feature": "web",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-02-17T12:46:08.818Z",
+      "feature": "web",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-02-17T12:46:26.664Z",
+      "feature": "[id]",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-02-17T12:46:34.602Z",
+      "feature": "sources",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-02-17T12:46:46.927Z",
+      "feature": "runs",
       "phase": "do",
       "action": "updated"
     }

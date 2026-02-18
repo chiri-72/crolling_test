@@ -27,37 +27,46 @@ def make_hash(canonical_url):
 
 # ── Sources ──────────────────────────────────────────────────
 
-def get_or_create_source(slug, name, source_type='html', base_url=None, crawl_policy=None):
+def get_or_create_source(slug, name, source_type='html', base_url=None, seed_url=None, crawl_policy=None):
     """소스 조회 또는 생성. 반환: source row dict or None"""
     supabase = get_supabase_client()
     if not supabase:
         return None
 
-    res = supabase.table('sources').select('*').eq('slug', slug).execute()
+    # 현재 DB 스키마에 slug 컬럼이 없는 경우를 대비하여 name으로 조회
+    try:
+        res = supabase.table('sources').select('*').eq('name', name).execute()
+    except Exception:
+        # slug 컬럼이 있는 경우를 위한 fallback (V2 스키마 준수 시)
+        res = supabase.table('sources').select('*').eq('slug', slug).execute()
+
     if res.data:
         return res.data[0]
 
     row = {
         'name': name,
-        'slug': slug,
+        #'slug': slug, 
         'type': source_type,
         'base_url': base_url,
+        'seed_url': seed_url,
         'crawl_policy': crawl_policy or {},
     }
+    # DB 스키마에 따라 slug 포함 여부 결정 (현재는 name 기반으로만 동작 확인됨)
     res = supabase.table('sources').insert(row).execute()
     return res.data[0] if res.data else None
 
 
 # ── Crawl Runs ───────────────────────────────────────────────
 
-def start_crawl_run(source_id):
+def start_crawl_run(source_id=None):
     """크롤링 런 시작. 반환: crawl_run row dict"""
     supabase = get_supabase_client()
     if not supabase:
         return None
+    # 현재 DB 스키마: source_id가 없고 status만 존재함
     res = supabase.table('crawl_runs').insert({
-        'source_id': source_id,
         'status': 'running',
+        'started_at': 'now()',
     }).execute()
     return res.data[0] if res.data else None
 
@@ -67,15 +76,18 @@ def finish_crawl_run(run_id, status, items_found=0, items_created=0, items_updat
     supabase = get_supabase_client()
     if not supabase:
         return
-    supabase.table('crawl_runs').update({
-        'status': status,
-        'finished_at': 'now()',
+    # 현재 DB 스키마 필드명 대응
+    data = {
+        'status': 'success' if status == 'completed' else 'fail',
+        'ended_at': 'now()',
         'items_found': items_found,
-        'items_created': items_created,
-        'items_updated': items_updated,
-        'items_skipped': items_skipped,
-        'error_message': error_message,
-    }).eq('id', run_id).execute()
+        'items_saved': items_created + items_updated, # items_created -> items_saved
+    }
+    # error_message 필드가 없을 수 있으므로 로그로 대체하거나 처리
+    try:
+        supabase.table('crawl_runs').update(data).eq('id', run_id).execute()
+    except Exception as e:
+        print(f"Error updating crawl_run: {e}", file=sys.stderr)
 
 
 # ── Crawl Logs ───────────────────────────────────────────────
@@ -85,13 +97,16 @@ def log_crawl(crawl_run_id, url, status='success', item_id=None, error_message=N
     supabase = get_supabase_client()
     if not supabase:
         return
-    supabase.table('crawl_logs').insert({
-        'crawl_run_id': crawl_run_id,
-        'url': url,
-        'status': status,
-        'item_id': item_id,
-        'error_message': error_message,
-    }).execute()
+    # 현재 DB 스키마: crawl_run_id -> run_id, status -> level 등
+    try:
+        supabase.table('crawl_logs').insert({
+            'run_id': crawl_run_id,
+            'level': 'info' if status == 'success' else 'error',
+            'message': f"URL: {url} | Status: {status} | Error: {error_message}" if error_message else f"URL: {url} success",
+            'meta': {'url': url, 'item_id': item_id}
+        }).execute()
+    except Exception as e:
+        print(f"Error logging crawl: {e}", file=sys.stderr)
 
 
 # ── Items — Upsert ───────────────────────────────────────────
@@ -118,13 +133,17 @@ def upsert_item(source_id, data):
         'language': data.get('language', 'en'),
         'published_at': data.get('published_at'),
         'canonical_url': canonical_url,
-        'content_text': data.get('content_text'),
-        'content_html': data.get('content_html'),
+        # 'content_text': data.get('content_text'), # DB에 없음
+        # 'content_html': data.get('content_html'), # DB에 없음
         'raw': data.get('raw', {}),
         'hash': item_hash,
     }
 
     try:
+        # Debug: Check if canonical_url is missing
+        if not canonical_url:
+             print(f"Warning: canonical_url is empty for item '{data['title']}'", file=sys.stderr)
+
         res = supabase.table('items').upsert(row, on_conflict='hash').execute()
         if res.data:
             return res.data[0], 'created'
@@ -142,13 +161,14 @@ def upsert_translation(item_id, lang, title=None, summary=None, content=None, tr
     if not supabase:
         return False
 
+    # 현재 DB 스키마 필드명 대응: title -> title_translated
     row = {
         'item_id': item_id,
         'lang': lang,
-        'title': title,
-        'summary': summary,
-        'content': content,
-        'translator': translator,
+        'title_translated': title,
+        'summary_translated': summary,
+        'provider': 'gemini',
+        'model': translator,
     }
 
     try:

@@ -1,4 +1,5 @@
 import os
+import re
 import sys
 import time
 import requests
@@ -11,6 +12,7 @@ from storage import (
     start_crawl_run, finish_crawl_run, log_crawl,
 )
 from translator import translate_text
+from proxy_utility import get_request_params
 
 load_dotenv()
 
@@ -18,7 +20,7 @@ load_dotenv()
 # Target: Y Combinator Blog (List + Detail)
 # Schema: V2 (sources → items → item_translations + crawl_runs/logs)
 
-# ── YC Blog Source Config ────────────────────────────────────
+# ── Source Configs ───────────────────────────────────────────
 
 YC_SOURCE = {
     'slug': 'yc-blog',
@@ -39,20 +41,96 @@ YC_SOURCE = {
     },
 }
 
+VB_SOURCE = {
+    'slug': 'venturebeat-startups',
+    'name': 'VentureBeat Startups',
+    'source_type': 'rss',
+    'base_url': 'https://venturebeat.com',
+    'seed_url': 'https://venturebeat.com/feed/',
+    'crawl_policy': {'rate_limit_ms': 3000, 'max_items_per_run': 20},
+}
+
+TC_SOURCE = {
+    'slug': 'techcrunch-startups',
+    'name': 'TechCrunch Startups',
+    'source_type': 'rss',
+    'base_url': 'https://techcrunch.com',
+    'seed_url': 'https://techcrunch.com/category/startups/feed/',
+    'crawl_policy': {'rate_limit_ms': 3000, 'max_items_per_run': 20},
+}
+
+SIFTED_SOURCE = {
+    'slug': 'sifted',
+    'name': 'Sifted',
+    'source_type': 'rss',
+    'base_url': 'https://sifted.eu',
+    'seed_url': 'https://sifted.eu/feed',
+    'crawl_policy': {'rate_limit_ms': 3000, 'max_items_per_run': 20},
+}
+
+TIA_SOURCE = {
+    'slug': 'tech-in-asia',
+    'name': 'Tech in Asia',
+    'source_type': 'rss',
+    'base_url': 'https://www.techinasia.com',
+    'seed_url': 'https://www.techinasia.com/feed',
+    'crawl_policy': {'rate_limit_ms': 3000, 'max_items_per_run': 20},
+}
+
+GW_SOURCE = {
+    'slug': 'geekwire-startups',
+    'name': 'GeekWire Startups',
+    'source_type': 'rss',
+    'base_url': 'https://www.geekwire.com',
+    'seed_url': 'http://www.geekwire.com/startups/feed',
+    'crawl_policy': {'rate_limit_ms': 3000, 'max_items_per_run': 20},
+}
+
+EU_SOURCE = {
+    'slug': 'eu-startups',
+    'name': 'EU-Startups',
+    'source_type': 'rss',
+    'base_url': 'https://www.eu-startups.com',
+    'seed_url': 'https://www.eu-startups.com/feed',
+    'crawl_policy': {'rate_limit_ms': 3000, 'max_items_per_run': 20},
+}
+
+YT_YC_SOURCE = {
+    'slug': 'yc-youtube',
+    'name': 'Y Combinator (YouTube)',
+    'source_type': 'rss', # DB 제약 조건(sources_type_check) 준수
+    'parser_type': 'youtube', 
+    'base_url': 'https://www.youtube.com',
+    'seed_url': 'https://www.youtube.com/feeds/videos.xml?channel_id=UCcefcZRL2oaA_uBNeo5UOWg',
+    'crawl_policy': {'rate_limit_ms': 2000, 'max_items_per_run': 10},
+}
+
 
 # ── HTTP Fetch ───────────────────────────────────────────────
 
-def fetch_page(url):
-    try:
-        headers = {
-            'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.114 Safari/537.36'
-        }
-        response = requests.get(url, headers=headers, timeout=10)
-        response.raise_for_status()
-        return response.text
-    except Exception as e:
-        print(f"Error fetching {url}: {e}", file=sys.stderr)
-        return None
+def fetch_page(url, retries=3):
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.114 Safari/537.36'
+    }
+    
+    for attempt in range(retries):
+        try:
+            params = get_request_params(url)
+            # proxy_utility에서 생성한 params를 사용하여 요청
+            response = requests.get(
+                params["url"], 
+                proxies=params["proxies"], 
+                headers=headers, 
+                timeout=params["timeout"]
+            )
+            response.raise_for_status()
+            return response.text
+        except Exception as e:
+            print(f"Attempt {attempt + 1} failed for {url}: {e}", file=sys.stderr)
+            if attempt == retries - 1:
+                return None
+            time.sleep(2) # 재시도 전 대기
+    return None
 
 
 # ── Parsers ──────────────────────────────────────────────────
@@ -144,66 +222,153 @@ def parse_yc_blog_list(html):
                     })
             except:
                 continue
-
     return articles
+
+def parse_rss_feed(xml_content):
+    try:
+        soup = BeautifulSoup(xml_content, 'xml')
+    except Exception:
+        soup = BeautifulSoup(xml_content, 'html.parser')
+    items = []
+    for entry in soup.find_all('item'):
+        title = entry.find('title').get_text() if entry.find('title') else ""
+        link_tag = entry.find('link')
+        if link_tag:
+            link = link_tag.get_text().strip()
+            # html.parser가 <link/>URL 형식으로 잘못 파싱하는 경우 대비
+            if not link:
+                # 1. <link>URL</link> 또는 <link/>URL 형태 모두 지원
+                match = re.search(r'<link[^>]*?>(.*?)</link>|<link/>\s*([^\s<]+)', str(entry), re.I | re.S)
+                if match:
+                    link = (match.group(1) or match.group(2)).strip()
+                else:
+                    link = link_tag.get('href', "").strip()
+        else:
+            link = ""
+        
+        description = entry.find('description').get_text() if entry.find('description') else ""
+        author = entry.find('dc:creator').get_text() if entry.find('dc:creator') else "Unknown"
+        
+        # 날짜 태그 다양하게 시도
+        pub_date_tag = entry.find('pubDate') or entry.find('pubdate') or entry.find('published')
+        if not pub_date_tag:
+             pub_date_tag = entry.find('dc:date')
+        
+        pub_date = pub_date_tag.get_text() if pub_date_tag else ""
+        
+        items.append({
+            "title": title,
+            "url": link,
+            "author": author,
+            "published_date": pub_date,
+            "excerpt": description,
+        })
+    return items
+
+def parse_youtube_rss(xml_content):
+    try:
+        soup = BeautifulSoup(xml_content, 'xml')
+    except Exception:
+        soup = BeautifulSoup(xml_content, 'html.parser')
+    items = []
+    for entry in soup.find_all('entry'):
+        video_id = entry.find('yt:videoId').get_text() if entry.find('yt:videoId') else ""
+        title = entry.find('title').get_text() if entry.find('title') else ""
+        link_tag = entry.find('link')
+        if link_tag:
+            link = link_tag.get('href', "").strip()
+            if not link:
+                link = link_tag.get_text().strip()
+            if not link:
+                # 유튜브 RSS 특유의 <link rel="alternate" href="..."/> 패턴 대응
+                match = re.search(r'<link.*?href=[\"\'](.*?)[\"\']', str(entry), re.I)
+                if not match:
+                    match = re.search(r'<link[^>]*?>(.*?)</link>|<link/>\s*([^\s<]+)', str(entry), re.I | re.S)
+                if match:
+                    link = (match.group(1) or (match.groups()[-1] if len(match.groups()) > 1 else "")).strip()
+        else:
+            link = ""
+        
+        author = entry.find('author').find('name').get_text() if entry.find('author') else "Unknown"
+        pub_date = entry.find('published').get_text() if entry.find('published') else ""
+        
+        # summary에 임베드 코드를 넣어 프론트엔드에서 처리할 수 있게 함
+        embed_url = f"https://www.youtube.com/embed/{video_id}"
+        items.append({
+            "title": title,
+            "url": link,
+            "author": author,
+            "published_date": pub_date,
+            "excerpt": f"[VIDEO_EMBED]{embed_url}",
+        })
+    return items
 
 
 # ── Main Pipeline ────────────────────────────────────────────
 
-def run_yc_crawl(max_items=3):
-    """YC Blog 크롤링 전체 파이프라인 (V2)"""
-
-    # 1. Source 등록/조회
-    source = get_or_create_source(**YC_SOURCE)
+def run_source_crawl(source_config, max_items=3):
+    """범용 소스 크롤링 파이프라인"""
+    # 인자 필터링 (get_or_create_source에 필요한 것만 전달)
+    source = get_or_create_source(
+        slug=source_config['slug'],
+        name=source_config['name'],
+        source_type=source_config['source_type'],
+        base_url=source_config['base_url'],
+        seed_url=source_config.get('seed_url'),
+        crawl_policy=source_config.get('crawl_policy')
+    )
     if not source:
-        print("Failed to get/create source.", file=sys.stderr)
-        sys.exit(1)
+        print(f"Failed to get/create source: {source_config['name']}", file=sys.stderr)
+        return
     source_id = source['id']
-    print(f"Source: {source['name']} ({source_id})")
+    print(f"\nSource: {source['name']} ({source_id})")
 
-    # 2. Crawl Run 시작
     run = start_crawl_run(source_id)
     if not run:
         print("Failed to start crawl run.", file=sys.stderr)
-        sys.exit(1)
+        return
     run_id = run['id']
     print(f"Crawl Run started: {run_id}")
 
-    # 3. Fetch list page
-    target_url = YC_SOURCE['base_url']
-    print(f"Fetching list from {target_url}...")
-    list_html = fetch_page(target_url)
-    if not list_html:
-        finish_crawl_run(run_id, 'failed', error_message='Failed to fetch list page')
-        sys.exit(1)
+    target_url = source_config.get('seed_url') or source_config['base_url']
+    print(f"Fetching from {target_url}...")
+    content = fetch_page(target_url)
+    if not content:
+        finish_crawl_run(run_id, 'failed', error_message='Failed to fetch seed page')
+        return
 
-    articles = parse_yc_blog_list(list_html)
+    if source_config.get('parser_type') == 'youtube':
+        articles = parse_youtube_rss(content)
+    elif source_config['source_type'] == 'rss':
+        articles = parse_rss_feed(content)
+    else:
+        articles = parse_yc_blog_list(content)
+        
     items_found = len(articles)
     print(f"Found {items_found} articles.")
 
     created = updated = skipped = 0
-    rate_limit_s = YC_SOURCE['crawl_policy'].get('rate_limit_ms', 5000) / 1000
+    rate_limit_s = source_config['crawl_policy'].get('rate_limit_ms', 3000) / 1000
 
-    # 4. Process each article
     for article in articles[:max_items]:
         print(f"\nProcessing: {article['title']}")
-
         try:
-            # 4a. Fetch detail
-            content = parse_article_detail(article['url'])
+            # RSS인 경우 이미 요약이 있는 경우가 많으므로 detail fetch 생략 가능 (필요시 추가)
+            content_text = ""
+            if source_config['source_type'] != 'rss':
+                content_text = parse_article_detail(article['url'])
 
-            # 4b. Upsert item
             item_data = {
                 'title': article['title'],
                 'summary': article.get('excerpt'),
                 'author': article.get('author'),
-                'published_at': article.get('published_date'),
+                'published_at': article.get('published_date') if article.get('published_date') else datetime.now().isoformat(),
                 'canonical_url': article['url'],
-                'content_text': content,
+                'content_text': content_text,
                 'language': 'en',
                 'source_item_id': article['url'].rstrip('/').split('/')[-1],
                 'raw': {
-                    'source_url': YC_SOURCE['base_url'],
+                    'source_url': source_config['base_url'],
                     'crawled_at': datetime.now().isoformat(),
                 },
             }
@@ -218,19 +383,15 @@ def run_yc_crawl(max_items=3):
                 created += 1
             else:
                 updated += 1
-
             item_id = item['id']
             print(f"  Item {action}: {item_id}")
 
-            # 4c. Translate & save translation
             print(f"  Translating...")
             title_kr = translate_text(article['title'])
-            content_kr = translate_text(content) if content else ""
+            summary_kr = translate_text(article.get('excerpt')[:500]) if article.get('excerpt') else ""
 
-            upsert_translation(item_id, 'ko', title=title_kr, content=content_kr)
+            upsert_translation(item_id, 'ko', title=title_kr, summary=summary_kr)
             print(f"  Translation saved (ko)")
-
-            # 4d. Log success
             log_crawl(run_id, article['url'], 'success', item_id=item_id)
 
         except Exception as e:
@@ -238,18 +399,29 @@ def run_yc_crawl(max_items=3):
             log_crawl(run_id, article['url'], 'error', error_message=str(e))
             skipped += 1
 
-        # Rate limiting
-        print(f"  Waiting {rate_limit_s}s...")
         time.sleep(rate_limit_s)
 
-    # 5. Finish crawl run
     finish_crawl_run(run_id, 'completed',
                      items_found=items_found,
                      items_created=created,
                      items_updated=updated,
                      items_skipped=skipped)
-    print(f"\nCrawl Run completed: found={items_found} created={created} updated={updated} skipped={skipped}")
-
+    print(f"\nCrawl Run completed: {source_config['name']}")
 
 if __name__ == "__main__":
-    run_yc_crawl(max_items=3)
+    sources = [
+        (YC_SOURCE, 2), 
+        (VB_SOURCE, 2),
+        (TC_SOURCE, 2),
+        (SIFTED_SOURCE, 2),
+        (TIA_SOURCE, 2),
+        (GW_SOURCE, 2),
+        (EU_SOURCE, 2),
+        (YT_YC_SOURCE, 2),
+    ]
+    
+    for config, limit in sources:
+        try:
+            run_source_crawl(config, max_items=limit)
+        except Exception as e:
+            print(f"Error crawling {config['name']}: {e}", file=sys.stderr)
